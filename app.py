@@ -8,7 +8,7 @@ import cv2
 import pytesseract
 from PIL import Image
 import numpy as np
-import librosa
+import soundfile as sf
 import pytesseract
 from flask import Flask, request, jsonify, render_template_string
 
@@ -342,17 +342,34 @@ def model_face_image(path):
     }
 
 def model_voice_clone(path):
+    """
+    Baseline 'cloned voice' heuristic without librosa.
+
+    Strategy:
+    - Load audio with soundfile (supports wav, flac, ogg; mp3 if backend allows)
+    - Compute:
+        - zero-crossing rate (ZCR)
+        - spectral flatness (geometric mean / arithmetic mean of magnitude spectrum)
+    - Simple rules on these features.
+
+    Still NOT a real clone detector, but much lighter than librosa/numba.
+    """
     try:
-        y, sr = librosa.load(path, sr=None, mono=True)
+        # y: np.ndarray, sr: sample rate
+        y, sr = sf.read(path, always_2d=False)
     except Exception as e:
-        print("[VOICE ERROR]", e)  # <--- add this
+        print("[VOICE ERROR]", e)
         return {
             "success": False,
             "detector_type": "voice_clone",
             "error": f"Could not read audio: {e}"
         }
 
-    if y.size == 0:
+    # Convert stereo -> mono if needed
+    if isinstance(y, np.ndarray) and y.ndim > 1:
+        y = np.mean(y, axis=1)
+
+    if not isinstance(y, np.ndarray) or y.size == 0:
         return {
             "success": True,
             "detector_type": "voice_clone",
@@ -361,17 +378,32 @@ def model_voice_clone(path):
             "details": {"note": "Empty or unreadable audio."}
         }
 
-    duration_sec = float(len(y) / sr)
+    y = y.astype(float)
+    duration_sec = float(len(y) / sr) if sr else 0.0
 
-    zcr = librosa.feature.zero_crossing_rate(y)[0]
-    zcr_mean = float(np.mean(zcr))
+    # --- Zero Crossing Rate (simple manual version) ---
+    # Sign-based zero crossing count / total frames
+    signs = np.sign(y)
+    signs[signs == 0] = 1  # avoid zero plateaus
+    zero_crossings = np.where(np.diff(signs))[0]
+    zcr_mean = float(len(zero_crossings) / max(1, len(y)))
 
-    flatness = librosa.feature.spectral_flatness(y=y)[0]
-    flatness_mean = float(np.mean(flatness))
+    # --- Spectral Flatness (simple single-frame estimate) ---
+    # Use a window from the start (or shorter if file is tiny)
+    N = min(2048, len(y))
+    if N < 64:
+        # Too short for reliable spectrum, fall back to neutral
+        flatness_mean = 0.5
+    else:
+        window = y[:N]
+        spectrum = np.abs(np.fft.rfft(window)) + 1e-12  # avoid log(0)
+        geo_mean = float(np.exp(np.mean(np.log(spectrum))))
+        arith_mean = float(np.mean(spectrum))
+        flatness_mean = float(geo_mean / arith_mean) if arith_mean > 0 else 0.5
 
     # Heuristic:
-    # - extremely low ZCR + very low flatness => likely monotone synthetic
-    # - extremely high ZCR/flatness => noisy / artificial
+    # - extremely low ZCR + very low flatness => monotone / synthetic-like
+    # - extremely high ZCR or flatness => noisy / artificial
     base = 0.0
 
     if zcr_mean < 0.02:
@@ -404,10 +436,9 @@ def model_voice_clone(path):
             "duration_seconds": duration_sec,
             "zero_crossing_rate_mean": zcr_mean,
             "spectral_flatness_mean": flatness_mean,
-            "note": "Audio-feature heuristic; not a production-grade cloned-voice detector."
+            "note": "Audio-feature heuristic without librosa; not a production-grade cloned-voice detector."
         }
     }
-
 
 #status of api
 @app.route("/health", methods=["GET"])

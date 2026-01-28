@@ -5,5 +5,4 @@ opencv-python-headless
 pytesseract
 Pillow
 numpy
-librosa
 soundfile

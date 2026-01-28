@@ -17,4 +17,5 @@ COPY . .
 
 ENV PORT=8000
 
-CMD gunicorn --bind 0.0.0.0:${PORT} app:app
+# Fewer workers = less memory; bump timeout to avoid slow cold start issues
+CMD gunicorn --workers 1 --timeout 120 --bind 0.0.0.0:${PORT} app:app
