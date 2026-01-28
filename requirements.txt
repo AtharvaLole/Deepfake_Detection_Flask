@@ -1,0 +1,9 @@
+flask
+flask-cors
+gunicorn
+opencv-python-headless
+pytesseract
+Pillow
+numpy
+librosa
+soundfile
