@@ -342,22 +342,10 @@ def model_face_image(path):
     }
 
 def model_voice_clone(path):
-    """
-    Baseline 'cloned voice' heuristic.
-
-    Strategy:
-    - Load audio with librosa
-    - Compute:
-        - zero-crossing rate (ZCR)
-        - spectral flatness
-    - Simple rules on these features.
-
-    Again: NOT a real clone detector, but uses actual audio features.
-    """
-
     try:
         y, sr = librosa.load(path, sr=None, mono=True)
     except Exception as e:
+        print("[VOICE ERROR]", e)  # <--- add this
         return {
             "success": False,
             "detector_type": "voice_clone",
@@ -447,7 +435,7 @@ def detect_image_text():
         file_type = "document"
     else:
         os.remove(path)
-        return error(f"Unsupported extension for image/doc: .{ext}")
+        return error(f"Unsupported extension for image/doc: .{ext}.")
 
     try:
         response = model_image_text(path, file_type)
