@@ -466,7 +466,7 @@ def detect_image_text():
         file_type = "document"
     else:
         os.remove(path)
-        return error(f"Unsupported extension for image/doc: .{ext}.")
+        return error(f"Unsupported extension for image/doc: .{ext}. Please upload .jpeg, .png, .jpg, .bmp, .tiff files only")
 
     try:
         response = model_image_text(path, file_type)
@@ -475,7 +475,6 @@ def detect_image_text():
             os.remove(path)
 
     return jsonify(response)
-
 
 #video detection call
 @app.route("/api/detect/video", methods=["POST"])
@@ -492,7 +491,7 @@ def detect_video():
 
     if ext not in ALLOWED_VIDEO_EXT:
         os.remove(path)
-        return error(f"Unsupported video extension: .{ext}")
+        return error(f"Unsupported video extension: .{ext}. Please upload .mp4, .mkv, .mov, .avi files only.")
 
     try:
         response = model_video_deepfake(path)
@@ -518,7 +517,7 @@ def detect_face_image():
 
     if ext not in ALLOWED_IMAGE_EXT:
         os.remove(path)
-        return error(f"Unsupported image extension: .{ext}")
+        return error(f"Unsupported image extension: .{ext}. Please upload .jpeg, .png, .jpg, .bmp, .tiff")
 
     try:
         response = model_face_image(path)
@@ -544,7 +543,7 @@ def detect_voice():
 
     if ext not in ALLOWED_AUDIO_EXT:
         os.remove(path)
-        return error(f"Unsupported audio extension: .{ext}")
+        return error(f"Unsupported audio extension: .{ext}. Please upload only .wav, .mp3, .flac, .m4a files only")
 
     try:
         response = model_voice_clone(path)
@@ -848,14 +847,21 @@ DEMO_HTML = """
 <div class="shell">
   <h1>Deepfake Detection Dashboard</h1>
   <div class="subtitle">
-    Upload media files to assess manipulation risk across images, video, face photos, and voice recordings.
+    Upload media files to assess manipulation risk across images, video, face photos, and voice recordings.<br>
+    Supported files:<br>
+    Image: .jpeg, .jpg, .png, .bmp, .tiff <br>
+    Video: .mov, .mp4, .mkv, .avi <br>
+    Face: .jpeg, .jpg, .png, .bmp, .tiff <br>
+    Audio: .mp3, .wav, .m4a, .flac <br>
+
+
   </div>
 
   <div class="grid">
 
     <!-- Image / Document -->
     <div class="card">
-      <h2>Image / Document</h2>
+      <h2>Image Manipulation</h2>
       <p>Analyze images or documents for potentially manipulated text.</p>
       <form method="post" enctype="multipart/form-data">
         <input type="hidden" name="module" value="image-text">
