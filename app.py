@@ -840,9 +840,91 @@ DEMO_HTML = """
         border-radius: 18px;
       }
     }
+    /* --- Global blocking loader overlay --- */
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      display:none;
+      background: rgba(2, 6, 23, 0.78);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .loading-overlay.active {
+      display: flex;
+    }
+
+    .loading-card {
+      width: min(420px, calc(100% - 32px));
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(15, 23, 42, 0.92);
+      border-radius: 16px;
+      padding: 18px 16px;
+      box-shadow: 0 18px 45px rgba(15,23,42,0.9);
+      text-align: center;
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 4px solid rgba(148,163,184,0.25);
+      border-top-color: rgba(59,130,246,0.95);
+      margin: 0 auto 12px;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-title {
+      font-size: 14px;
+      color: var(--text-main);
+      margin: 0 0 4px 0;
+      letter-spacing: 0.02em;
+    }
+
+    .loading-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    body.is-loading {
+      overflow: hidden;
+    }
+
+    /* Disable pointer events while loading (belt + suspenders) */
+    body.is-loading * {
+      pointer-events: none;
+    }
+    body.is-loading .loading-overlay,
+    body.is-loading .loading-overlay * {
+      pointer-events: all;
+    }
+
   </style>
+  <script>
+  // Ensure loader is OFF by default on page load (prevents stuck overlay on reload/back nav)
+  document.addEventListener("DOMContentLoaded", function () {
+    document.body.classList.remove("is-loading");
+  });
+</script>
+
 </head>
 <body>
+<div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-busy="true">
+  <div class="loading-card">
+    <div class="spinner"></div>
+    <p class="loading-title">Analyzing your file…</p>
+    <p class="loading-subtitle" id="loadingSubtitle">Please wait. This can take a few seconds.</p>
+  </div>
+</div>
+
 
 <div class="shell">
   <h1>Deepfake Detection Dashboard</h1>
@@ -865,7 +947,7 @@ DEMO_HTML = """
       <p>Analyze images or documents for potentially manipulated text.</p>
       <form method="post" enctype="multipart/form-data">
         <input type="hidden" name="module" value="image-text">
-        <input type="file" name="file">
+        <input type="file" name="file" required>
         <button type="submit">Upload & Analyze</button>
       </form>
       {% if image_text %}
@@ -935,7 +1017,7 @@ DEMO_HTML = """
       <p>Scan videos for abnormal frame patterns that may indicate manipulation.</p>
       <form method="post" enctype="multipart/form-data">
         <input type="hidden" name="module" value="video">
-        <input type="file" name="file">
+        <input type="file" name="file" required>
         <button type="submit">Upload & Analyze</button>
       </form>
       {% if video %}
@@ -1003,7 +1085,7 @@ DEMO_HTML = """
       <p>Evaluate face images using detection and blur-based integrity checks.</p>
       <form method="post" enctype="multipart/form-data">
         <input type="hidden" name="module" value="face-image">
-        <input type="file" name="file">
+        <input type="file" name="file" required>
         <button type="submit">Upload & Analyze</button>
       </form>
       {% if face_image %}
@@ -1071,7 +1153,7 @@ DEMO_HTML = """
       <p>Check audio recordings for patterns commonly seen in synthetic or cloned voices.</p>
       <form method="post" enctype="multipart/form-data">
         <input type="hidden" name="module" value="voice">
-        <input type="file" name="file">
+        <input type="file" name="file" required>
         <button type="submit">Upload & Analyze</button>
       </form>
       {% if voice %}
@@ -1136,8 +1218,42 @@ DEMO_HTML = """
   </div>
 </div>
 
+<script>
+  (function () {
+    const overlay = document.getElementById("loadingOverlay");
+    const subtitle = document.getElementById("loadingSubtitle");
+
+    function showLoading(text) {
+      if (text) subtitle.textContent = text;
+      document.body.classList.add("is-loading");
+      overlay.classList.add("active");
+    }
+
+    document.querySelectorAll("form").forEach(form => {
+      form.addEventListener("submit", function () {
+        const module = form.querySelector('input[name="module"]')?.value || "";
+        const map = {
+          "image-text": "Checking for manipulated text…",
+          "video": "Scanning video frames…",
+          "face-image": "Analyzing face integrity…",
+          "voice": "Analyzing audio for cloning patterns…"
+        };
+        showLoading(map[module] || "Analyzing your file…");
+      });
+    });
+
+    // Always hide loader once page has rendered (new response)
+    window.addEventListener("load", function () {
+      document.body.classList.remove("is-loading");
+      overlay.classList.remove("active");
+    });
+  })();
+</script>
+
+
 </body>
 </html>
+
 """
 
 
