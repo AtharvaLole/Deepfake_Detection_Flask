@@ -6,3 +6,5 @@ pytesseract
 Pillow
 numpy
 soundfile
+Flask-Dance
+dotenv
