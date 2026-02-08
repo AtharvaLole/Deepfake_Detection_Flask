@@ -7,6 +7,9 @@ from flask_cors import CORS
 import cv2
 import pytesseract
 from PIL import Image
+from flask import session, redirect, url_for
+from flask_dance.contrib.google import make_google_blueprint, google
+from dotenv import load_dotenv
 import numpy as np
 import soundfile as sf
 import pytesseract
@@ -22,6 +25,17 @@ else:
 
 
 app = Flask(__name__)
+load_dotenv()
+app.secret_key = os.environ.get("SECRET_KEY", "dev_change_this")
+os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"  # ONLY for local http testing
+
+google_bp = make_google_blueprint(
+    client_id=os.environ.get("GOOGLE_OAUTH_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET"),
+    scope=["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"],
+)
+app.register_blueprint(google_bp, url_prefix="/login")
+
 CORS(app)
 
 #configu
@@ -528,6 +542,7 @@ def detect_face_image():
     return jsonify(response)
 
 
+
 #audio voice clone
 @app.route("/api/detect/voice", methods=["POST"])
 def detect_voice():
@@ -552,6 +567,15 @@ def detect_voice():
             os.remove(path)
 
     return jsonify(response)
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("demo_dashboard"))
+
+
+
+
 DEMO_HTML = """
 <!DOCTYPE html>
 <html>
@@ -927,6 +951,20 @@ DEMO_HTML = """
 
 
 <div class="shell">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+  <div style="font-size:12px; color:#9ca3af;">
+    {% if user %}
+      Signed in as <strong style="color:#e5e7eb;">{{ user.name or user.email }}</strong>
+    {% endif %}
+  </div>
+  <div style="display:flex; gap:10px; align-items:center;">
+    {% if user and user.picture %}
+      <img src="{{ user.picture }}" style="width:28px;height:28px;border-radius:999px;border:1px solid rgba(148,163,184,0.35);" />
+    {% endif %}
+    <a href="/logout" style="font-size:12px; color:#93c5fd; text-decoration:none;">Logout</a>
+  </div>
+</div>
+
   <h1>Deepfake Detection Dashboard</h1>
   <div class="subtitle">
     Upload media files to assess manipulation risk across images, video, face photos, and voice recordings.<br>
@@ -1256,9 +1294,103 @@ DEMO_HTML = """
 
 """
 
+LOGIN_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Login - Deepfake Dashboard</title>
+  <style>
+    body {
+      margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top left, rgba(59,130,246,0.22), transparent 55%),
+                  radial-gradient(circle at bottom right, rgba(236,72,153,0.18), transparent 55%),
+                  #0b1120;
+      color:#e5e7eb; padding:16px;
+    }
+    .card{
+      width:min(460px,100%);
+      background: rgba(15,23,42,0.96);
+      border:1px solid rgba(148,163,184,0.35);
+      border-radius:18px;
+      box-shadow:0 18px 45px rgba(15,23,42,0.9);
+      padding:18px 18px 16px;
+    }
+    h1{ margin:0 0 6px; font-size:20px; }
+    p{ margin:0 0 14px; color:#9ca3af; font-size:13px; line-height:1.45; }
+    a.btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:10px;
+      padding:10px 14px; border-radius:999px;
+      background: linear-gradient(135deg,#2563eb,#4f46e5);
+      color:white; text-decoration:none; font-size:13px;
+      box-shadow:0 10px 24px rgba(37,99,235,0.4);
+    }
+    .mini{
+      margin-top:12px; font-size:11px; color:#94a3b8;
+    }
+    .userbox{
+      display:flex; align-items:center; gap:10px;
+      margin-top:10px; padding:10px 12px;
+      border-radius:14px;
+      border:1px solid rgba(148,163,184,0.25);
+      background: rgba(2,6,23,0.45);
+    }
+    .avatar{
+      width:34px; height:34px; border-radius:999px;
+      border:1px solid rgba(148,163,184,0.35);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Deepfake Detection Dashboard</h1>
+    <p>Sign in to upload and analyze images, videos, face photos and voice recordings.</p>
+
+    {% if user %}
+      <div class="userbox">
+        {% if user.picture %}<img class="avatar" src="{{ user.picture }}">{% endif %}
+        <div>
+          <div style="font-size:12px; color:#9ca3af;">Signed in as</div>
+          <div style="font-size:13px;">{{ user.name or user.email }}</div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <a class="btn" href="/demo">Go to Dashboard</a>
+        <a class="btn" href="/logout" style="background:rgba(148,163,184,0.15); box-shadow:none;">Logout</a>
+      </div>
+    {% else %}
+      <a class="btn" href="/login/google">Continue with Google</a>
+    {% endif %}
+  </div>
+</body>
+</html>
+"""
+
+
+@app.route("/", methods=["GET"])
+def login_page():
+    if google.authorized:
+        return redirect(url_for("demo_dashboard"))
+    return render_template_string(LOGIN_HTML, user=session.get("user"))
 
 @app.route("/demo", methods=["GET", "POST"])
 def demo_dashboard():
+    if not google.authorized:
+        return redirect(url_for("google.login"))
+    if "user" not in session:
+      resp = google.get("/oauth2/v2/userinfo")
+      if not resp.ok:
+          return redirect(url_for("google.login"))
+      data = resp.json()
+      session["user"] = {
+          "email": data.get("email"),
+          "name": data.get("name"),
+          "picture": data.get("picture"),
+      }
+      return redirect("/demo")
+    
     image_text_res = None
     video_res = None
     face_res = None
@@ -1313,12 +1445,14 @@ def demo_dashboard():
                     os.remove(path)
 
     return render_template_string(
-        DEMO_HTML,
-        image_text=image_text_res,
-        video=video_res,
-        face_image=face_res,
-        voice=voice_res
+    DEMO_HTML,
+    image_text=image_text_res,
+    video=video_res,
+    face_image=face_res,
+    voice=voice_res,
+    user=session.get("user")   # ✅ ADD THIS
     )
+
 
 
 if __name__ == "__main__":
