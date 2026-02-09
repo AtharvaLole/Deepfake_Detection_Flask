@@ -571,7 +571,7 @@ def detect_voice():
 @app.route("/logout")
 def logout():
     session.clear()
-    return redirect(url_for("demo_dashboard"))
+    return redirect(url_for("https://deepfake-detection-flask.onrender.com/login/google/authorized"))
 
 
 
