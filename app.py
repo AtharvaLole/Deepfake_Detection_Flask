@@ -1378,11 +1378,11 @@ def login_page():
 @app.route("/demo", methods=["GET", "POST"])
 def demo_dashboard():
     if not google.authorized:
-        return redirect(url_for("google.login"))
+        return redirect(url_for("https://deepfake-detection-flask.onrender.com/login/google/authorized"))
     if "user" not in session:
       resp = google.get("/oauth2/v2/userinfo")
       if not resp.ok:
-          return redirect(url_for("google.login"))
+          return redirect(url_for("https://deepfake-detection-flask.onrender.com/login/google/authorized"))
       data = resp.json()
       session["user"] = {
           "email": data.get("email"),
